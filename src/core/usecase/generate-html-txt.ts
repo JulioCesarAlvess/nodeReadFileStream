@@ -50,29 +50,7 @@ export class GenerateHtmlTxt {
   setHeader: Transform;
   private readonly logger = new Logger(GenerateHtmlTxt.name);
 
-  constructor(private eventEmitter: EventEmitter2) {
-    this.chunckCounter = new ChunckCounter();
-
-    const _this = this;
-
-    this.mapToHtml = new Transform({
-      transform(chunk, encoding, cb) {
-        const data = chunk.toString();
-        const result = `<div><p><span>${data}</span></p></div>\n`;
-        cb(null, result);
-      },
-    });
-
-    this.setHeader = new Transform({
-      transform(chunk, encoding, cb) {
-        if (_this.chunckCounter.get() > 0) {
-          return cb(null, chunk);
-        }
-        _this.chunckCounter.add();
-        cb(null, `${headerHtml}`.concat(chunk));
-      },
-    });
-  }
+  constructor(private eventEmitter: EventEmitter2) {}
 
   @OnEvent('finish.csv')
   async on(event: CreateFileEvent) {
@@ -81,10 +59,29 @@ export class GenerateHtmlTxt {
     const csvFilename = `${folderName}/${account}.csv`;
     const readbleStream = createReadStream(csvFilename);
     const htmlTxtName = `${folderName}/${account}.txt`;
+    const chunckCounter = new ChunckCounter();
+
+    const mapToHtml = new Transform({
+      transform(chunk, encoding, cb) {
+        const data = chunk.toString();
+        const result = `<div><p><span>${data}</span></p></div>\n`;
+        cb(null, result);
+      },
+    });
+
+    const setHeader = new Transform({
+      transform(chunk, encoding, cb) {
+        if (chunckCounter.get() > 0) {
+          return cb(null, chunk);
+        }
+        chunckCounter.add();
+        cb(null, headerHtml.concat(chunk));
+      },
+    });
 
     readbleStream
-      .pipe(this.mapToHtml)
-      .pipe(this.setHeader)
+      .pipe(mapToHtml)
+      .pipe(setHeader)
       .pipe(createWriteStream(htmlTxtName))
       .on('finish', () => {
         this.logger.log(
